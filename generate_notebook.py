@@ -42,28 +42,53 @@ Run computational fluid dynamics on microfluidic geometries exported from Fusion
 
 # ── Cell 2: Install ────────────────────────────────────────────────────────────
 cells.append(code(
-"""# @title Cell 1 — Install FEniCSx (run once per session, ~5-10 min)
+"""# @title Cell 1 — Install All Dependencies (run once per session, ~5-10 min)
+# Dependencies are defined in the job .json under "dependencies".
+# This cell installs them all upfront so no manual fixes are needed later.
 import subprocess, sys
 
-def _run(cmd):
+def _apt(pkg):
+    r = subprocess.run(["apt-get", "install", "-y", "-q", pkg],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"  apt warning ({pkg}): {r.stderr[-500:]}")
+
+def _pip(pkg):
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", pkg],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"  pip warning ({pkg}): {r.stderr[-500:]}")
+
+def _shell(cmd):
     r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if r.returncode != 0:
         print(r.stderr[-3000:])
     return r.returncode
 
-print("Installing FEniCSx via FEM-on-Colab...")
-ret = _run(
+# ── 1. System libraries (from job dependencies.apt) ───────────────────────────
+print("Installing system libraries...")
+for pkg in ["libglu1-mesa", "libxrender1"]:
+    print(f"  apt: {pkg}")
+    _apt(pkg)
+
+# ── 2. Python packages (from job dependencies.pip) ────────────────────────────
+print("Installing Python packages...")
+for pkg in ["gmsh", "meshio", "h5py", "scipy"]:
+    print(f"  pip: {pkg}")
+    _pip(pkg)
+
+# ── 3. FEniCSx (from job dependencies.fenics) ─────────────────────────────────
+print("Installing FEniCSx via FEM-on-Colab (~5-10 min)...")
+ret = _shell(
     "wget -q https://fem-on-colab.github.io/releases/fenics-install-real.sh "
     "-O /tmp/fenics-install.sh && bash /tmp/fenics-install.sh"
 )
 if ret != 0:
     print("FEM-on-Colab failed — trying condacolab fallback...")
-    _run("pip install -q condacolab")
-    import condacolab; condacolab.install()   # will restart runtime; re-run from Cell 3
+    _pip("condacolab")
+    import condacolab; condacolab.install()  # restarts runtime — re-run from Cell 2
 
-print("Installing Gmsh, meshio, scipy...")
-_run("pip install -q gmsh meshio h5py scipy")
-print("Done. Proceed to the next cell.")
+print("All dependencies installed. Proceed to Cell 2.")
 """))
 
 # ── Cell 3: Imports ────────────────────────────────────────────────────────────
@@ -153,6 +178,15 @@ print()
 print("Parameters:")
 for k, v in params.items():
     print(f"  {k}: {v}")
+
+# Show dependencies that were required by this job
+deps = job.get("dependencies", {})
+if deps:
+    print()
+    print("Dependencies (installed in Cell 1):")
+    print(f"  apt : {deps.get('apt', [])}")
+    print(f"  pip : {deps.get('pip', [])}")
+    print(f"  FEniCSx: {deps.get('fenics', False)}")
 
 stl_local = f"/content/{job['stl_filename']}"
 if not os.path.exists(stl_local):

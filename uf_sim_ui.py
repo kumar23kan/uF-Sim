@@ -247,6 +247,11 @@ class MicrofluidicSimUI:
             "parameters": params,
             "upload_to_drive": self.drive_upload.get(),
             "created_at": datetime.datetime.now().isoformat(),
+            "dependencies": {
+                "apt": ["libglu1-mesa", "libxrender1"],
+                "pip": ["gmsh", "meshio", "h5py", "scipy"],
+                "fenics": True,
+            },
         }
         return config
 
