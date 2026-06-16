@@ -76,6 +76,20 @@ MESH_RESOLUTIONS = ["Coarse", "Medium", "Fine", "Very Fine"]
 SOLVERS = ["FEniCSx (Recommended)", "OpenFOAM"]
 OUTPUT_FORMATS = ["VTU (ParaView)", "VTK (ParaView)", "OpenFOAM Case"]
 
+# All known Colab dependencies — written into every exported job JSON
+COLAB_DEPENDENCIES = {
+    "apt": ["libglu1-mesa", "libxrender1"],
+    "pip": ["gmsh", "meshio", "h5py", "scipy"],
+    "fenics": True,
+    "colab_notes": [
+        "Run Cell 1 first — it installs all apt, pip, and FEniCSx dependencies.",
+        "If FEM-on-Colab fails, condacolab will restart the runtime automatically.",
+        "After a runtime restart, re-run Cell 1 — it detects conda and installs FEniCSx via conda.",
+        "libglu1-mesa is a system library required by gmsh — installed via apt, not pip.",
+        "mpi4py and petsc4py are bundled with FEniCSx — do not pip install them separately.",
+    ],
+}
+
 
 # ── Main UI ────────────────────────────────────────────────────────────────────
 
@@ -163,6 +177,15 @@ class MicrofluidicSimUI:
         drive_frame.pack(fill=tk.X, pady=(2, 10))
         ttk.Checkbutton(drive_frame, text="Upload job to Google Drive after export (requires Drive credentials)", variable=self.drive_upload).pack(anchor="w")
 
+        # ── Colab Setup Notes ──
+        self._section(main, "6. Colab Setup — Known Requirements")
+        notes_frame = ttk.Frame(main, style="Card.TFrame", padding=(10, 6))
+        notes_frame.pack(fill=tk.X, pady=(2, 10))
+        for note in COLAB_DEPENDENCIES["colab_notes"]:
+            ttk.Label(notes_frame, text=f"  •  {note}", background="#ffffff",
+                      foreground="#333", wraplength=700, anchor="w",
+                      justify="left").pack(anchor="w", pady=1)
+
         # ── Action buttons ──
         sep = ttk.Separator(main, orient="horizontal")
         sep.pack(fill=tk.X, pady=10)
@@ -171,6 +194,7 @@ class MicrofluidicSimUI:
         btn_frame.pack(fill=tk.X)
         ttk.Button(btn_frame, text="Preview Config", command=self._preview_config).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(btn_frame, text="Export Job File", command=self._export_job, style="Primary.TButton").pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(btn_frame, text="Colab Steps", command=self._show_colab_steps).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(btn_frame, text="Clear", command=self._clear).pack(side=tk.RIGHT)
 
         # ── Status bar ──
@@ -247,11 +271,7 @@ class MicrofluidicSimUI:
             "parameters": params,
             "upload_to_drive": self.drive_upload.get(),
             "created_at": datetime.datetime.now().isoformat(),
-            "dependencies": {
-                "apt": ["libglu1-mesa", "libxrender1"],
-                "pip": ["gmsh", "meshio", "h5py", "scipy"],
-                "fenics": True,
-            },
+            "dependencies": COLAB_DEPENDENCIES,
         }
         return config
 
@@ -265,6 +285,46 @@ class MicrofluidicSimUI:
         text = tk.Text(win, wrap=tk.WORD, font=("Courier", 10), padx=8, pady=8)
         text.pack(fill=tk.BOTH, expand=True)
         text.insert(tk.END, json.dumps(config, indent=2))
+        text.config(state=tk.DISABLED)
+
+    def _show_colab_steps(self):
+        win = tk.Toplevel(self.root)
+        win.title("Colab Setup Steps")
+        win.geometry("600x420")
+        win.configure(bg="#f0f4f8")
+        ttk.Label(win, text="Colab Setup Checklist", font=("Helvetica", 13, "bold"),
+                  background="#f0f4f8").pack(anchor="w", padx=16, pady=(14, 6))
+
+        steps = [
+            ("Step 1", "Open microfluidic_cfd.ipynb from github.com/kumar23kan/uF-Sim"),
+            ("Step 2", "Run Cell 1 — installs libglu1-mesa (apt), gmsh/meshio/scipy (pip), and FEniCSx"),
+            ("Step 3", "If runtime restarts (condacolab), re-run Cell 1 — it detects conda and finishes FEniCSx install"),
+            ("Step 4", "Run Cell 2 — imports all libraries (auto-installs anything still missing)"),
+            ("Step 5", "Run Cell 3 — mount Drive and upload this job .json file"),
+            ("Step 6", "Run Cell 4 — upload the .stl file when prompted"),
+            ("Step 7", "Run Cells 5-10 — mesh, define solvers, run simulation"),
+            ("Step 8", "Run Cell 11 — download results zip, open .xdmf files in ParaView"),
+        ]
+        notes = [
+            "Do NOT pip install mpi4py or petsc4py — they come bundled with FEniCSx",
+            "libglu1-mesa is a system lib for gmsh — Cell 1 handles this via apt-get",
+            "Always run cells top to bottom — later cells depend on earlier ones",
+        ]
+
+        frame = ttk.Frame(win, style="Card.TFrame", padding=12)
+        frame.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 8))
+        text = tk.Text(frame, wrap=tk.WORD, font=("Courier", 9), relief="flat",
+                       bg="#ffffff", padx=6, pady=6)
+        text.pack(fill=tk.BOTH, expand=True)
+
+        text.tag_config("heading", font=("Courier", 9, "bold"), foreground="#1a56db")
+        text.tag_config("warn", foreground="#c0392b")
+        for label, desc in steps:
+            text.insert(tk.END, f"{label}: ", "heading")
+            text.insert(tk.END, f"{desc}\n")
+        text.insert(tk.END, "\nKnown issues:\n", "heading")
+        for note in notes:
+            text.insert(tk.END, f"  • {note}\n", "warn")
         text.config(state=tk.DISABLED)
 
     def _export_job(self):
@@ -287,9 +347,14 @@ class MicrofluidicSimUI:
             json.dump(config, f, indent=2)
 
         self.status_var.set(f"Job exported: {os.path.basename(job_path)}")
-        msg = f"Job file saved:\n{job_path}\n\nNext step: open the Colab notebook and load this file."
-        if self.drive_upload.get():
-            msg += "\n\nDrive upload: coming in next step (requires credentials)."
+        msg = (
+            f"Job file saved:\n{job_path}\n\n"
+            "Next steps in Colab:\n"
+            "  1. Run Cell 1 — installs all dependencies\n"
+            "  2. If runtime restarts, re-run Cell 1\n"
+            "  3. Run Cell 2 onwards — upload this .json when prompted\n\n"
+            "Click 'Colab Steps' for the full checklist."
+        )
         messagebox.showinfo("Export Complete", msg)
 
     def _clear(self):
