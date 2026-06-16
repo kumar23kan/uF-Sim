@@ -43,9 +43,8 @@ Run computational fluid dynamics on microfluidic geometries exported from Fusion
 # ── Cell 2: Install ────────────────────────────────────────────────────────────
 cells.append(code(
 """# @title Cell 1 — Install All Dependencies (run once per session, ~5-10 min)
-# Dependencies are defined in the job .json under "dependencies".
-# This cell installs them all upfront so no manual fixes are needed later.
-import subprocess, sys
+# Safe to re-run after a runtime restart — detects what is already installed.
+import subprocess, sys, os, importlib
 
 def _apt(pkg):
     r = subprocess.run(["apt-get", "install", "-y", "-q", pkg],
@@ -65,28 +64,44 @@ def _shell(cmd):
         print(r.stderr[-3000:])
     return r.returncode
 
-# ── 1. System libraries (from job dependencies.apt) ───────────────────────────
+def _conda(pkg):
+    r = subprocess.run(["conda", "install", "-c", "conda-forge", pkg, "-y", "-q"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"  conda warning ({pkg}): {r.stderr[-500:]}")
+
+# ── 1. System libraries ───────────────────────────────────────────────────────
 print("Installing system libraries...")
 for pkg in ["libglu1-mesa", "libxrender1"]:
-    print(f"  apt: {pkg}")
     _apt(pkg)
 
-# ── 2. Python packages (from job dependencies.pip) ────────────────────────────
+# ── 2. FEniCSx ────────────────────────────────────────────────────────────────
+if importlib.util.find_spec("dolfinx") is None:
+    # Check if condacolab already set up conda (post-restart state)
+    if os.path.exists("/usr/local/conda-meta"):
+        print("Conda detected — installing FEniCSx via conda (~10 min)...")
+        _conda("fenics-dolfinx")
+        _conda("mpich")
+    else:
+        print("Installing FEniCSx via FEM-on-Colab (~5-10 min)...")
+        ret = _shell(
+            "wget -q https://fem-on-colab.github.io/releases/fenics-install-real.sh "
+            "-O /tmp/fenics-install.sh && bash /tmp/fenics-install.sh"
+        )
+        if ret != 0:
+            print("FEM-on-Colab failed — setting up condacolab (runtime will restart)...")
+            print("After restart, run Cell 1 again to complete FEniCSx installation.")
+            _pip("condacolab")
+            import condacolab; condacolab.install()
+else:
+    print("FEniCSx already installed, skipping.")
+
+# ── 3. Python packages ────────────────────────────────────────────────────────
 print("Installing Python packages...")
 for pkg in ["gmsh", "meshio", "h5py", "scipy"]:
-    print(f"  pip: {pkg}")
-    _pip(pkg)
-
-# ── 3. FEniCSx (from job dependencies.fenics) ─────────────────────────────────
-print("Installing FEniCSx via FEM-on-Colab (~5-10 min)...")
-ret = _shell(
-    "wget -q https://fem-on-colab.github.io/releases/fenics-install-real.sh "
-    "-O /tmp/fenics-install.sh && bash /tmp/fenics-install.sh"
-)
-if ret != 0:
-    print("FEM-on-Colab failed — trying condacolab fallback...")
-    _pip("condacolab")
-    import condacolab; condacolab.install()  # restarts runtime — re-run from Cell 2
+    if importlib.util.find_spec(pkg) is None:
+        print(f"  pip: {pkg}")
+        _pip(pkg)
 
 print("All dependencies installed. Proceed to Cell 2.")
 """))
