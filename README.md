@@ -9,33 +9,48 @@ A two-part toolchain for running computational fluid dynamics (CFD) simulations 
 | Component | File | Purpose |
 |---|---|---|
 | Desktop UI | `uf_sim_ui.py` | Set parameters, choose simulation, export job config |
-| Colab notebook | `microfluidic_cfd.ipynb` | Mesh, solve, and export results for ParaView |
+| Local runner | `run_simulation.py` | Run simulation locally using the `uf-sim` conda environment |
+| Colab notebook | `microfluidic_cfd.ipynb` | Mesh, solve, and export results for ParaView (cloud option) |
 
-The workflow is:
+The recommended workflow (local):
 1. Export your microfluidic channel geometry from Fusion 360 as **STL**
 2. Open the **desktop UI** to configure your simulation and export a job `.json`
-3. Open the **Colab notebook**, upload the `.json` and `.stl`, and run the simulation
-4. Download the results and open them in **ParaView**
+3. Run `run_simulation.py` locally — it reads the `.json`, meshes, solves, and writes output
+4. Open the results in **ParaView**
 
 ---
 
 ## Requirements
 
-### Local machine
+### Desktop UI only
 
-- Python 3.9 or later
-- `tkinter` (included with most Python installs)
+- Python 3.9 or later with `tkinter` (included with most Python installs)
 
 ```bash
-# No additional pip packages needed for the UI
 python3 uf_sim_ui.py
 ```
 
-### Google Colab
+### Local simulation runner
+
+Create the `uf-sim` conda environment once:
+
+```bash
+conda create -n uf-sim -c conda-forge \
+    fenics-dolfinx mpich gmsh meshio h5py scipy python=3.11 -y
+```
+
+Then activate it before running simulations:
+
+```bash
+conda activate uf-sim
+python3 run_simulation.py <job.json>
+```
+
+### Google Colab (cloud option)
 
 Dependencies are installed automatically by Cell 2 of the notebook:
 
-- [FEniCSx](https://fenicsproject.org/) — finite element solver (via FEM-on-Colab)
+- [FEniCSx](https://fenicsproject.org/) — finite element solver
 - [Gmsh](https://gmsh.info/) — 3D mesh generation from STL
 - `meshio`, `h5py`, `scipy` — mesh I/O and particle integration
 
@@ -103,7 +118,29 @@ The exported `.json` bundles all settings and is passed to Colab.
 
 ---
 
-### 3. Run the simulation (Google Colab)
+### 3a. Run the simulation locally (recommended)
+
+```bash
+conda activate uf-sim
+python3 run_simulation.py uFSim_<timestamp>.json
+```
+
+- If no argument is given, a file-picker dialog opens.
+- Results are written to `output/<job_id>/` next to the STL file.
+- A `results_summary.json` is also saved with pressure drop, mixing efficiency, etc.
+
+Typical runtime on a modern laptop:
+
+| Resolution | Approximate time |
+|---|---|
+| Coarse | 30–90 seconds |
+| Medium | 2–5 minutes |
+| Fine | 10–20 minutes |
+| Very Fine | 30–60 minutes |
+
+---
+
+### 3b. Run the simulation on Google Colab (cloud option)
 
 1. Open [Google Colab](https://colab.research.google.com)
 2. Upload `microfluidic_cfd.ipynb` via **File → Upload notebook**
@@ -165,6 +202,7 @@ If auto-detection fails for your geometry (e.g. channels not axis-aligned), edit
 ```
 Research/uF_Sim/
 ├── uf_sim_ui.py            # Desktop parameter UI
+├── run_simulation.py       # Local simulation runner
 ├── microfluidic_cfd.ipynb  # Google Colab simulation notebook
 ├── generate_notebook.py    # Script that regenerates the notebook
 └── README.md               # This file
