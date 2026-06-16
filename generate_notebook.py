@@ -95,6 +95,9 @@ elif _has_conda():
         print("conda install failed. Run manually: !conda install -c conda-forge fenics-dolfinx mpich -y")
     else:
         print("FEniCSx installed via conda.")
+        print("Restarting kernel so conda packages are visible to Python...")
+        import IPython
+        IPython.Application.instance().kernel.do_shutdown(restart=True)
 else:
     print("Installing FEniCSx via FEM-on-Colab (~5-10 min)...")
     ret = _shell(
