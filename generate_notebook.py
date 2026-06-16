@@ -69,8 +69,12 @@ print("Done. Proceed to the next cell.")
 # ── Cell 3: Imports ────────────────────────────────────────────────────────────
 cells.append(code(
 """# @title Cell 2 — Imports
-# Ensure non-FEniCSx packages are present even after a runtime restart
+# Ensure system libs and Python packages are present after any runtime restart
 import importlib, subprocess, sys
+
+# libGLU is a system dependency required by gmsh — not installable via pip
+subprocess.run(["apt-get", "install", "-y", "-q", "libglu1-mesa"],
+               capture_output=True)
 
 _pkgs = {"gmsh": "gmsh", "meshio": "meshio", "h5py": "h5py", "scipy": "scipy"}
 for _pip, _mod in _pkgs.items():
