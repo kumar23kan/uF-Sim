@@ -44,7 +44,7 @@ Run computational fluid dynamics on microfluidic geometries exported from Fusion
 cells.append(code(
 """# @title Cell 1 — Install All Dependencies (run once per session, ~5-10 min)
 # Safe to re-run after a runtime restart — detects what is already installed.
-import subprocess, sys, os, importlib
+import subprocess, sys, os
 
 def _apt(pkg):
     r = subprocess.run(["apt-get", "install", "-y", "-q", pkg],
@@ -64,11 +64,16 @@ def _shell(cmd):
         print(r.stderr[-3000:])
     return r.returncode
 
-def _conda(pkg):
-    r = subprocess.run(["conda", "install", "-c", "conda-forge", pkg, "-y", "-q"],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"  conda warning ({pkg}): {r.stderr[-500:]}")
+def _has_fenics():
+    try:
+        import dolfinx, mpi4py, petsc4py
+        return True
+    except Exception:
+        return False
+
+def _has_conda():
+    return (os.path.exists("/usr/local/conda-meta") or
+            os.path.exists("/opt/conda/conda-meta"))
 
 # ── 1. System libraries ───────────────────────────────────────────────────────
 print("Installing system libraries...")
@@ -76,34 +81,42 @@ for pkg in ["libglu1-mesa", "libxrender1"]:
     _apt(pkg)
 
 # ── 2. FEniCSx ────────────────────────────────────────────────────────────────
-if importlib.util.find_spec("dolfinx") is None:
-    # Check if condacolab already set up conda (post-restart state)
-    if os.path.exists("/usr/local/conda-meta"):
-        print("Conda detected — installing FEniCSx via conda (~10 min)...")
-        _conda("fenics-dolfinx")
-        _conda("mpich")
+if _has_fenics():
+    print("FEniCSx already installed.")
+elif _has_conda():
+    print("Conda detected — installing FEniCSx via conda (~10 min)...")
+    print("  conda: fenics-dolfinx mpich  (output visible below)")
+    # capture_output=False so progress prints to screen
+    r = subprocess.run(
+        ["conda", "install", "-c", "conda-forge", "fenics-dolfinx", "mpich", "-y"],
+        capture_output=False
+    )
+    if r.returncode != 0:
+        print("conda install failed. Run manually: !conda install -c conda-forge fenics-dolfinx mpich -y")
     else:
-        print("Installing FEniCSx via FEM-on-Colab (~5-10 min)...")
-        ret = _shell(
-            "wget -q https://fem-on-colab.github.io/releases/fenics-install-real.sh "
-            "-O /tmp/fenics-install.sh && bash /tmp/fenics-install.sh"
-        )
-        if ret != 0:
-            print("FEM-on-Colab failed — setting up condacolab (runtime will restart)...")
-            print("After restart, run Cell 1 again to complete FEniCSx installation.")
-            _pip("condacolab")
-            import condacolab; condacolab.install()
+        print("FEniCSx installed via conda.")
 else:
-    print("FEniCSx already installed, skipping.")
+    print("Installing FEniCSx via FEM-on-Colab (~5-10 min)...")
+    ret = _shell(
+        "wget -q https://fem-on-colab.github.io/releases/fenics-install-real.sh "
+        "-O /tmp/fenics-install.sh && bash /tmp/fenics-install.sh"
+    )
+    if ret != 0:
+        print("FEM-on-Colab failed — setting up condacolab (runtime will restart)...")
+        print("After restart, run Cell 1 again — it will install FEniCSx via conda.")
+        _pip("condacolab")
+        import condacolab; condacolab.install()
 
 # ── 3. Python packages ────────────────────────────────────────────────────────
 print("Installing Python packages...")
 for pkg in ["gmsh", "meshio", "h5py", "scipy"]:
-    if importlib.util.find_spec(pkg) is None:
+    try:
+        __import__(pkg)
+    except ImportError:
         print(f"  pip: {pkg}")
         _pip(pkg)
 
-print("All dependencies installed. Proceed to Cell 2.")
+print("All dependencies ready. Proceed to Cell 2.")
 """))
 
 # ── Cell 3: Imports ────────────────────────────────────────────────────────────
