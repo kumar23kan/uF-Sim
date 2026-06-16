@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+.claude/
+*.f3d
+output/
